@@ -243,11 +243,24 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         if text.startswith("DR_APPROVE_"):
             from bson import ObjectId
             session_id = text.replace("DR_APPROVE_", "")
-            db.counseling_sessions.update_one(
-                {"_id": ObjectId(session_id)},
-                {"$set": {"status": "Approved", "approved_by": wa_id}}
-            )
-            return "Session approved! The student will be notified. 🩺", "START", data, None
+            
+            # Fetch session to get student_wa_id
+            session_doc = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
+            if session_doc:
+                db.counseling_sessions.update_one(
+                    {"_id": ObjectId(session_id)},
+                    {"$set": {"status": "Approved", "approved_by": wa_id}}
+                )
+                
+                # Notify Student
+                student_id = session_doc["student_wa_id"]
+                notif_msg = (f"Great news! Your counselling session request for {session_doc['date']} "
+                             f"at {session_doc['time']} has been APPROVED by Dr. {data.get('name', 'a Mindly Professional')}. 🩺\n\n"
+                             f"A video link will be shared via WhatsApp shortly before the session.")
+                send_whatsapp_message(student_id, notif_msg)
+                
+                return "Session approved! The student has been notified. 🩺", "START", data, None
+            return "Error: Session not found.", "START", data, None
         else:
             return "Back to Dashboard.", "START", data, None
 
