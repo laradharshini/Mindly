@@ -7,7 +7,7 @@ from app.config import Config
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
 # Risk Classification Model and Prompt
-risk_model = genai.GenerativeModel('gemini-pro')
+risk_model = genai.GenerativeModel('gemini-2.5-flash')
 
 RISK_CLASSIFICATION_SYSTEM_PROMPT = """You are an emotional risk classification system for a student mental health support platform.
 
@@ -144,25 +144,20 @@ def classify_risk(user_message):
             return "LOW"
         return risk_level
     except Exception as e:
-        print(f"CRITICAL: Error in risk classification: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in risk classification: {e}")
         return "LOW"
 
 def generate_mindly_response(user_message, risk_level):
     """
     Generates a Mindly response based on user message and risk level.
     """
-    print(f"DEBUG: Generating Mindly response for risk level: {risk_level}")
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = MINDLY_SYSTEM_PROMPT.format(risk_level=risk_level)
         response = model.generate_content(f"{prompt}\n\nUser message: {user_message}")
         return response.text
     except Exception as e:
-        print(f"CRITICAL: Error in Mindly response generation: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in Mindly response generation: {e}")
         return "I'm here for you and I want to help. Would you like to tell me more about what's on your mind?"
 
 def send_whatsapp_message(recipient_id, message_text):
