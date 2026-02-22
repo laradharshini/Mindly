@@ -11,7 +11,7 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
 ]
 
-model = genai.GenerativeModel(model_name="gemini-pro", safety_settings=safety_settings)
+model = genai.GenerativeModel(model_name="gemini-2.5-flash", safety_settings=safety_settings)
 
 def generate_response(user_message):
     system_prompt = """
