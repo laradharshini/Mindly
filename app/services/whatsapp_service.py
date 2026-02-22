@@ -241,7 +241,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             list_data = {
                 "button": "View/Manage",
                 "sections": [
-                    {"title": "Manage Individual Student", "rows": rows},
+                    {"title": "Student List", "rows": rows},
                     {"title": "Bulk Actions", "rows": action_rows}
                 ]
             }
