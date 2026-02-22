@@ -14,6 +14,7 @@ from app.services.ai_service import genai
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+    config_class.check()
 
     # Initialize extensions
     # PyMongo(app) # We are using a helper get_db which uses the mongo object if initialized?

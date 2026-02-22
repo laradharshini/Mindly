@@ -11,7 +11,6 @@ load_dotenv(env_path)
 
 class Config:
     MONGO_URI = os.getenv("MONGO_URI")
-    print(f"DEBUG: MONGO_URI from env: {MONGO_URI}")
     JWT_SECRET = os.getenv("JWT_SECRET")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     DB_NAME = os.getenv("DB_NAME", "mindly_db")
@@ -21,6 +20,10 @@ class Config:
     WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
     WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
     
-    if not MONGO_URI:
-        # Fallback or error - let PyMongo handle it, but maybe print a warning?
-        print("WARNING: MONGO_URI is not set in environment variables.")
+    @staticmethod
+    def check():
+        print(f"DEBUG: MONGO_URI loaded: {'Set' if Config.MONGO_URI else 'MISSING'}")
+        if Config.MONGO_URI and "localhost" in Config.MONGO_URI:
+            print("WARNING: MONGO_URI contains 'localhost'. This will fail on Render!")
+        print(f"DEBUG: GEMINI_API_KEY loaded: {'Set' if Config.GEMINI_API_KEY else 'MISSING'}")
+        print(f"DEBUG: WHATSAPP_ACCESS_TOKEN loaded: {'Set' if Config.WHATSAPP_ACCESS_TOKEN else 'MISSING'}")
