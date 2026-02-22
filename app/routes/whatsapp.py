@@ -64,9 +64,8 @@ def handle_message():
                                 nfm_reply = interactive.get('nfm_reply', {})
                                 response_data = json.loads(nfm_reply.get('response_json', '{}'))
                                 user_text = f"FLOW_SUBMIT_{nfm_reply.get('name', 'unknown')}"
-                                # We'll store the flow data in updated_data later
-                                session['flow_response'] = response_data
                                 is_button = True
+                                # response_data will be added to session later
                         
                         # Handle Image Messages
                         elif message.get('type') == 'image':
@@ -75,14 +74,22 @@ def handle_message():
                             is_button = True # Treat media as a special automated interaction
                         
                         if user_text:
-                            # 1. Get current session
-                            session = get_user_session(sender_id)
+                            # 1. Get current session (Only once)
+                            session_record = get_user_session(sender_id)
                             
+                            # Handle Flow Data (if already captured in nfm_reply block)
+                            if 'response_data' in locals() and response_data:
+                                session_record['flow_response'] = response_data
+                            
+                            print(f"DEBUG: Processing {sender_id} | State: {session_record.get('state')} | Text: {user_text}", flush=True)
+
                             # 2. Process conversation flow
                             response_text, next_state, updated_data, buttons, list_data = handle_conversational_flow(
-                                sender_id, user_text, session, is_button=is_button
+                                sender_id, user_text, session_record, is_button=is_button
                             )
                             
+                            print(f"DEBUG: Next State: {next_state}", flush=True)
+
                             # 3. Update session in DB
                             update_user_session(sender_id, state=next_state, data=updated_data)
                             

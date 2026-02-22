@@ -170,6 +170,8 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
     data = session.get("data", {})
     text = message_text.strip()
     
+    print(f"DEBUG: wa_id={wa_id}, state={state}, text={text}", flush=True)
+    
     db = get_db()
     
     # Global Reset Command
@@ -177,7 +179,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         # Special debug command to test the NEW registration flow
         if text.upper() == "TEST REGISTRATION":
             db.users.delete_one({"wa_id": wa_id})
-            db.sessions.delete_one({"wa_id": wa_id})
+            db.chat_sessions.delete_one({"wa_id": wa_id})
             return "🗑️ *Test Mode:* Your old profile has been cleared.\nType 'HI' to start the new registration!", "START", {}, None, None
 
         # 1. Check if user already exists in DB
@@ -192,7 +194,6 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                             f"• Status: Active")
                 
                 buttons = [{"id": "DR_VIEW_REQS", "title": "View Requests"}]
-                
                 return response, "DOCTOR_DASHBOARD", {"role": "Doctor", "name": user["name"]}, buttons, None
             else:
                 response = f"Welcome back to Mindly, {user['name']}! 🎓\nHow can I support you today?"
@@ -206,6 +207,22 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         # New User Flow
         state = "START"
         data = {}
+
+    # Global Role Selection (Independent of state to prevent loops)
+    if text == "ROLE_STUDENT":
+        return ("Welcome! Please complete the registration form:"), "ROLE_SELECTION", {"role": "Student"}, None, {
+            "type": "flow",
+            "flow_id": Config.WHATSAPP_FLOW_ID,
+            "flow_token": f"student_{wa_id}",
+            "button": "Fill Form 🎓"
+        }
+    elif text == "ROLE_DOCTOR":
+        return ("Mindly - Doctor Onboarding 🩺\n\nPlease complete the verification carefully:"), "ROLE_SELECTION", {"role": "Doctor"}, None, {
+            "type": "flow",
+            "flow_id": Config.WHATSAPP_FLOW_ID,
+            "flow_token": f"doctor_{wa_id}",
+            "button": "Start Onboarding 🩺"
+        }
 
     if state == "START":
         # Silent redirect for existing users who are in START state
@@ -648,24 +665,9 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         return "❌ Please send an *image* of your Government ID.", "DR_REG_GOVT_ID", data, None, None
 
     elif state == "ROLE_SELECTION":
-        if text == "ROLE_STUDENT":
-            # Student Flow
-            return ("Welcome! Please complete the registration form:"), "START", {"role": "Student"}, None, {
-                "type": "flow",
-                "flow_id": Config.WHATSAPP_FLOW_ID,
-                "flow_token": f"student_{wa_id}",
-                "button": "Fill Form 🎓"
-            }
-        elif text == "ROLE_DOCTOR":
-            # Doctor Flow
-            return ("Mindly - Doctor Onboarding 🩺\n\nPlease complete the verification carefully:"), "START", {"role": "Doctor"}, None, {
-                "type": "flow",
-                "flow_id": Config.WHATSAPP_FLOW_ID,
-                "flow_token": f"doctor_{wa_id}",
-                "button": "Start Onboarding 🩺"
-            }
-        elif text == "ROLE_OTHER":
+        if text == "ROLE_OTHER":
             return "Thank you! Please tell us how we can help you specifically.", "OTHER_FLOW", {"role": "Other"}, None, None
+        return "Please select your role from the buttons above ⬆️", "ROLE_SELECTION", {}, None, None
 
     elif state == "OTHER_FLOW":
         return "Thank you for sharing. We will get back to you soon.", "START", {}, None, None
@@ -802,7 +804,9 @@ def send_whatsapp_flow_message(recipient_id, text, flow_data):
     }
     
     try:
+        print(f"DEBUG: Sending Flow {flow_data['flow_id']} to {recipient_id}", flush=True)
         response = requests.post(url, headers=headers, json=payload)
+        print(f"DEBUG: Meta Response: {response.text}", flush=True)
         response.raise_for_status()
         return response.json()
     except Exception as e:

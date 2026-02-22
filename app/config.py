@@ -28,3 +28,4 @@ class Config:
             print("WARNING: MONGO_URI contains 'localhost'. This will fail on Render!")
         print(f"DEBUG: GEMINI_API_KEY loaded: {'Set' if Config.GEMINI_API_KEY else 'MISSING'}")
         print(f"DEBUG: WHATSAPP_ACCESS_TOKEN loaded: {'Set' if Config.WHATSAPP_ACCESS_TOKEN else 'MISSING'}")
+        print(f"DEBUG: WHATSAPP_FLOW_ID loaded: {Config.WHATSAPP_FLOW_ID if Config.WHATSAPP_FLOW_ID else 'MISSING'}")
