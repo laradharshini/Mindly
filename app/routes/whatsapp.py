@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.config import Config
-from app.services.whatsapp_service import classify_risk, generate_mindly_response, send_whatsapp_message
+from app.services.whatsapp_service import handle_conversational_flow, send_whatsapp_message
+from app.services.session_service import get_user_session, update_user_session
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
 
@@ -26,13 +27,11 @@ def verify_webhook():
 @whatsapp_bp.route('/webhook', methods=['POST'])
 def handle_message():
     """
-    Handles incoming messages from WhatsApp.
+    Handles incoming messages from WhatsApp with state management.
     """
     data = request.get_json()
-    print(f"Incoming WhatsApp data: {data}")
-
+    
     try:
-        # Check if it's a message event
         if data.get('object') == 'whatsapp_business_account':
             for entry in data.get('entry', []):
                 for change in entry.get('changes', []):
@@ -41,28 +40,24 @@ def handle_message():
                     
                     if messages:
                         message = messages[0]
-                        sender_id = message.get('from') # User's WhatsApp ID
+                        sender_id = message.get('from')
                         
                         if message.get('type') == 'text':
                             user_text = message.get('text', {}).get('body')
                             
-                            # 1. Classify Risk
-                            risk_level = classify_risk(user_text)
-                            print(f"Risk Level for {sender_id}: {risk_level}")
+                            # 1. Get current session
+                            session = get_user_session(sender_id)
                             
-                            # 2. Generate Mindly Response
-                            # Note: n8n workflow had a condition: if risk is CRITICAL, 
-                            # it sends the response. If not CRITICAL, it also sends the response.
-                            # The logic in the JSON shows both paths lead to "Send message".
-                            # One path (CRITICAL) goes directly to send message, 
-                            # the other (ELSE) goes to AI Agent then send message.
-                            # Actually, it looks like Mindly response is generated for both, 
-                            # but the risk level is passed to it.
+                            # 2. Process conversation flow
+                            response_text, next_state, updated_data = handle_conversational_flow(
+                                sender_id, user_text, session
+                            )
                             
-                            ai_response = generate_mindly_response(user_text, risk_level)
+                            # 3. Update session in DB
+                            update_user_session(sender_id, state=next_state, data=updated_data)
                             
-                            # 3. Send Message back to user
-                            send_whatsapp_message(sender_id, ai_response)
+                            # 4. Send response
+                            send_whatsapp_message(sender_id, response_text)
                             
             return jsonify({"status": "success"}), 200
         else:
