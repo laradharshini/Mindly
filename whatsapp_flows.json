@@ -3,14 +3,14 @@
     "screens": [
         {
             "id": "DOCTOR_REGISTRATION",
-            "title": "Doctor Onboarding",
+            "title": "Onboarding",
             "data": {},
             "layout": {
                 "type": "SingleColumnLayout",
                 "children": [
                     {
                         "type": "Form",
-                        "name": "registration_form",
+                        "name": "reg_form",
                         "children": [
                             {
                                 "type": "TextInput",
@@ -35,17 +35,17 @@
                             {
                                 "type": "TextInput",
                                 "name": "license_no",
-                                "label": "Medical License Number",
+                                "label": "Medical License",
                                 "required": true
                             },
                             {
                                 "type": "Footer",
-                                "label": "Set Availability",
+                                "label": "Next: Verification",
                                 "on-click-action": {
                                     "name": "navigate",
                                     "next": {
                                         "type": "screen",
-                                        "name": "DOCTOR_AVAILABILITY"
+                                        "name": "DOCTOR_VERIFICATION"
                                     },
                                     "payload": {
                                         "full_name": "${form.full_name}",
@@ -61,30 +61,28 @@
             }
         },
         {
-            "id": "DOCTOR_AVAILABILITY",
-            "title": "Set Your Availability",
-            "terminal": true,
-            "success": true,
+            "id": "DOCTOR_VERIFICATION",
+            "title": "Identity Proof",
             "data": {
                 "full_name": {
                     "type": "string",
                     "__mapping": "data.full_name",
-                    "__example__": "Dr. John Doe"
+                    "__example__": "Dr. John"
                 },
                 "email": {
                     "type": "string",
                     "__mapping": "data.email",
-                    "__example__": "doctor@example.com"
+                    "__example__": "dr@ex.com"
                 },
                 "phone": {
                     "type": "string",
                     "__mapping": "data.phone",
-                    "__example__": "+919999999999"
+                    "__example__": "+9199"
                 },
                 "license_no": {
                     "type": "string",
                     "__mapping": "data.license_no",
-                    "__example__": "MC12345"
+                    "__example__": "L123"
                 }
             },
             "layout": {
@@ -92,12 +90,90 @@
                 "children": [
                     {
                         "type": "Form",
-                        "name": "availability_form",
+                        "name": "verify_form",
                         "children": [
                             {
-                                "type": "TextCaption",
-                                "text": "Select your available dates and times for sessions."
+                                "type": "PhotoPicker",
+                                "name": "medical_id_img",
+                                "label": "Medical ID Card",
+                                "required": true,
+                                "max-files": 1
                             },
+                            {
+                                "type": "PhotoPicker",
+                                "name": "govt_id_img",
+                                "label": "Government ID",
+                                "required": true,
+                                "max-files": 1
+                            },
+                            {
+                                "type": "Footer",
+                                "label": "Next: Availability",
+                                "on-click-action": {
+                                    "name": "navigate",
+                                    "next": {
+                                        "type": "screen",
+                                        "name": "DOCTOR_AVAILABILITY"
+                                    },
+                                    "payload": {
+                                        "full_name": "${data.full_name}",
+                                        "email": "${data.email}",
+                                        "phone": "${data.phone}",
+                                        "license_no": "${data.license_no}",
+                                        "medical_id": "${form.medical_id_img}",
+                                        "govt_id": "${form.govt_id_img}"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "DOCTOR_AVAILABILITY",
+            "title": "Set Timing",
+            "terminal": true,
+            "success": true,
+            "data": {
+                "full_name": {
+                    "type": "string",
+                    "__mapping": "data.full_name",
+                    "__example__": "Dr. John"
+                },
+                "email": {
+                    "type": "string",
+                    "__mapping": "data.email",
+                    "__example__": "dr@ex.com"
+                },
+                "phone": {
+                    "type": "string",
+                    "__mapping": "data.phone",
+                    "__example__": "+1"
+                },
+                "license_no": {
+                    "type": "string",
+                    "__mapping": "data.license_no",
+                    "__example__": "L123"
+                },
+                "medical_id": {
+                    "type": "array",
+                    "__mapping": "data.medical_id",
+                    "__example__": []
+                },
+                "govt_id": {
+                    "type": "array",
+                    "__mapping": "data.govt_id",
+                    "__example__": []
+                }
+            },
+            "layout": {
+                "type": "SingleColumnLayout",
+                "children": [
+                    {
+                        "type": "Form",
+                        "name": "avail_form",
+                        "children": [
                             {
                                 "type": "DatePicker",
                                 "name": "available_dates",
@@ -105,36 +181,20 @@
                                 "required": true
                             },
                             {
-                                "type": "CheckboxGroup",
-                                "name": "available_times",
-                                "label": "Available Time Slots",
-                                "required": true,
-                                "data-source": [
-                                    {
-                                        "id": "09:00",
-                                        "title": "09:00 AM"
-                                    },
-                                    {
-                                        "id": "11:00",
-                                        "title": "11:00 AM"
-                                    },
-                                    {
-                                        "id": "14:00",
-                                        "title": "02:00 PM"
-                                    },
-                                    {
-                                        "id": "16:00",
-                                        "title": "04:00 PM"
-                                    },
-                                    {
-                                        "id": "19:00",
-                                        "title": "07:00 PM"
-                                    }
-                                ]
+                                "type": "TimePicker",
+                                "name": "start_time",
+                                "label": "Start Time",
+                                "required": true
+                            },
+                            {
+                                "type": "TimePicker",
+                                "name": "end_time",
+                                "label": "End Time",
+                                "required": true
                             },
                             {
                                 "type": "Footer",
-                                "label": "Complete Registration",
+                                "label": "Complete Setup",
                                 "on-click-action": {
                                     "name": "complete",
                                     "payload": {
@@ -142,8 +202,11 @@
                                         "email": "${data.email}",
                                         "phone": "${data.phone}",
                                         "license_no": "${data.license_no}",
+                                        "medical_id": "${data.medical_id}",
+                                        "govt_id": "${data.govt_id}",
                                         "available_dates": "${form.available_dates}",
-                                        "available_times": "${form.available_times}"
+                                        "start_time": "${form.start_time}",
+                                        "end_time": "${form.end_time}"
                                     }
                                 }
                             }

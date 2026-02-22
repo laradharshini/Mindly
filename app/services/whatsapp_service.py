@@ -231,11 +231,45 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             if "license_no" in flow_data: # Doctor Flow
                 data["license_no"] = flow_data["license_no"]
                 data["available_dates"] = flow_data.get("available_dates", [])
-                data["available_times"] = flow_data.get("available_times", [])
                 
+                # Extract Times
+                start_time = flow_data.get("start_time", "09:00")
+                end_time = flow_data.get("end_time", "17:00")
+                data["available_times"] = [f"{start_time} - {end_time}"]
+                
+                # Extract Media Tokens from PhotoPicker
+                medical_photo_list = flow_data.get("medical_id", [])
+                if medical_photo_list and len(medical_photo_list) > 0:
+                    data["medical_id_img"] = medical_photo_list[0] # Take first photo
+                
+                govt_photo_list = flow_data.get("govt_id", [])
+                if govt_photo_list and len(govt_photo_list) > 0:
+                    data["govt_id_img"] = govt_photo_list[0]
+
+                # Finalize Dr Registration directly from Flow if IDs are provided
+                if data.get("medical_id_img") and data.get("govt_id_img"):
+                    db.users.update_one({"wa_id": wa_id}, {"$set": {
+                        "name": data["name"],
+                        "email": data["email"],
+                        "phone": data["phone"],
+                        "license_no": data["license_no"],
+                        "available_dates": data["available_dates"],
+                        "available_times": data["available_times"],
+                        "medical_id": data["medical_id_img"],
+                        "govt_id": data["govt_id_img"],
+                        "role": "Doctor",
+                        "status": "Active",
+                        "registered_at": datetime.utcnow()
+                    }}, upsert=True)
+                    
+                    return (f"🎊 *Registration Complete!*\n\n"
+                            f"Welcome, Dr. {data['name']}! 🩺\n"
+                            "Your professional credentials and availability have been stored.\n\n"
+                            "Your dashboard:"), "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View Requests"}], None
+
                 return ("🎊 *Registration & Availability Received!*\n\n"
                         f"Welcome, Dr. {data['name']}! 🩺\n"
-                        "To finish your professional verification, please send a photo of your *Medical ID Card* now:"), "DR_REG_MEDICAL_ID", data, None, None
+                        "To finish, please send a photo of your *Medical ID Card*:"), "DR_REG_MEDICAL_ID", data, None, None
             else: # Student Flow
                 db.users.update_one({"wa_id": wa_id}, {"$set": {
                     "name": data["name"],
