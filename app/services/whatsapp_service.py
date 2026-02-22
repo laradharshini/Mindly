@@ -179,8 +179,17 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         if user:
             role = user.get("role", "student").capitalize()
             if role == "Doctor":
-                response = f"Welcome back, Dr. {user['name']}! 🩺\n\nYour dashboard:\n• Pending Sessions: 0\n• Status: Active"
-                buttons = [{"id": "DR_VIEW_REQS", "title": "View Requests"}]
+                # Real-time count of pending sessions
+                pending_count = db.counseling_sessions.count_documents({"status": "Pending"})
+                response = (f"Welcome back, Dr. {user['name']}! 🩺\n\n"
+                            f"Your dashboard:\n"
+                            f"• Pending Sessions: {pending_count}\n"
+                            f"• Status: Active")
+                
+                buttons = []
+                if pending_count > 0:
+                    buttons.append({"id": "DR_VIEW_REQS", "title": "View Requests"})
+                
                 return response, "DOCTOR_DASHBOARD", {"role": "Doctor", "name": user["name"]}, buttons
             else:
                 response = f"Welcome back to Mindly, {user['name']}! 🎓\nHow can I support you today?"
@@ -195,6 +204,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         data = {}
 
     if state == "START":
+        # ... (rest of the code remains similar)
         response = "Welcome to Mindly 💙\nYour mental health companion. Please select your role to get started:"
         buttons = [
             {"id": "ROLE_STUDENT", "title": "I'm a Student"},
@@ -202,6 +212,44 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             {"id": "ROLE_OTHER", "title": "Other"}
         ]
         return response, "ROLE_SELECTION", {}, buttons
+
+    # --- DOCTOR DASHBOARD PERSISTENCE ---
+    elif state == "DOCTOR_DASHBOARD":
+        if text == "DR_VIEW_REQS":
+            # Fetch pending sessions
+            pending_list = list(db.counseling_sessions.find({"status": "Pending"}).limit(3))
+            if not pending_list:
+                return "No pending requests at the moment.", "DOCTOR_DASHBOARD", data, None
+            
+            response = "Mindly - Pending Requests 🗓️\n\n"
+            for i, sess in enumerate(pending_list):
+                # Retrieve student name if possible
+                student = db.users.find_one({"wa_id": sess["student_wa_id"]})
+                name = student.get("name", "Unknown Student") if student else "Unknown Student"
+                response += f"{i+1}. {name}\n📅 {sess['date']} @ {sess['time']}\n💬 {sess['description']}\n\n"
+            
+            response += "Would you like to approve the oldest request?"
+            buttons = [
+                {"id": f"DR_APPROVE_{pending_list[0]['_id']}", "title": "Approve Oldest"},
+                {"id": "DR_DASHBOARD", "title": "Back to Dashboard"}
+            ]
+            return response, "DOCTOR_PROCESS_REQS", data, buttons
+        
+        elif text == "DR_DASHBOARD":
+            # Redirect to START which will re-trigger the Welcome/Dashboard logic
+            return "Refreshing dashboard...", "START", data, None
+
+    elif state == "DOCTOR_PROCESS_REQS":
+        if text.startswith("DR_APPROVE_"):
+            from bson import ObjectId
+            session_id = text.replace("DR_APPROVE_", "")
+            db.counseling_sessions.update_one(
+                {"_id": ObjectId(session_id)},
+                {"$set": {"status": "Approved", "approved_by": wa_id}}
+            )
+            return "Session approved! The student will be notified. 🩺", "START", data, None
+        else:
+            return "Back to Dashboard.", "START", data, None
 
     elif state == "ROLE_SELECTION":
         if text == "ROLE_STUDENT":
