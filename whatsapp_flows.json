@@ -45,13 +45,13 @@
                                     "name": "navigate",
                                     "next": {
                                         "type": "screen",
-                                        "name": "DOCTOR_AVAILABILITY",
-                                        "payload": {
-                                            "full_name": "${form.full_name}",
-                                            "email": "${form.email}",
-                                            "phone": "${form.phone}",
-                                            "license_no": "${form.license_no}"
-                                        }
+                                        "name": "DOCTOR_AVAILABILITY"
+                                    },
+                                    "payload": {
+                                        "full_name": "${form.full_name}",
+                                        "email": "${form.email}",
+                                        "phone": "${form.phone}",
+                                        "license_no": "${form.license_no}"
                                     }
                                 }
                             }
@@ -66,19 +66,23 @@
             "data": {
                 "full_name": {
                     "type": "string",
-                    "__mapping": "data.full_name"
+                    "__mapping": "data.full_name",
+                    "__example__": "Dr. John Doe"
                 },
                 "email": {
                     "type": "string",
-                    "__mapping": "data.email"
+                    "__mapping": "data.email",
+                    "__example__": "doctor@example.com"
                 },
                 "phone": {
                     "type": "string",
-                    "__mapping": "data.phone"
+                    "__mapping": "data.phone",
+                    "__example__": "+919999999999"
                 },
                 "license_no": {
                     "type": "string",
-                    "__mapping": "data.license_no"
+                    "__mapping": "data.license_no",
+                    "__example__": "MC12345"
                 }
             },
             "layout": {
@@ -96,7 +100,6 @@
                                 "type": "DatePicker",
                                 "name": "available_dates",
                                 "label": "Available Dates",
-                                "mode": "multiple",
                                 "required": true
                             },
                             {
@@ -104,7 +107,7 @@
                                 "name": "available_times",
                                 "label": "Available Time Slots",
                                 "required": true,
-                                "options": [
+                                "data-source": [
                                     {
                                         "id": "09:00",
                                         "title": "09:00 AM"
