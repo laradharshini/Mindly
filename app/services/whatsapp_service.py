@@ -1,7 +1,9 @@
 import google.generativeai as genai
 import requests
 import json
+import datetime
 from app.config import Config
+from app.database import get_db
 
 # Configure Gemini
 genai.configure(api_key=Config.GEMINI_API_KEY)
@@ -160,55 +162,86 @@ def generate_mindly_response(user_message, risk_level):
         print(f"Error in Mindly response generation: {e}")
         return "I'm here for you and I want to help. Would you like to tell me more about what's on your mind?"
 
-def handle_conversational_flow(wa_id, message_text, session):
+def handle_conversational_flow(wa_id, message_text, session, is_button=False):
     """
     Main state machine for Mindly WhatsApp conversations.
-    Returns: (response_text, next_state, updated_data)
     """
     state = session.get("state", "START")
     data = session.get("data", {})
     text = message_text.strip()
     
+    db = get_db()
+    
     # Global Reset Command
     if text.upper() in ["RESET", "START", "HI", "HELLO"]:
+        # 1. Check if user already exists in DB
+        user = db.users.find_one({"wa_id": wa_id})
+        if user:
+            role = user.get("role", "student").capitalize()
+            if role == "Doctor":
+                response = f"Welcome back, Dr. {user['name']}! 🩺\n\nYour dashboard:\n• Pending Sessions: 0\n• Status: Active"
+                buttons = [{"id": "DR_VIEW_REQS", "title": "View Requests"}]
+                return response, "DOCTOR_DASHBOARD", {"role": "Doctor", "name": user["name"]}, buttons
+            else:
+                response = f"Welcome back to Mindly, {user['name']}! 🎓\nHow can I support you today?"
+                buttons = [
+                    {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+                    {"id": "STUDENT_BOOK", "title": "Book Session"}
+                ]
+                return response, "STUDENT_MENU", {"role": "Student", "name": user["name"]}, buttons
+        
+        # New User Flow
         state = "START"
         data = {}
 
     if state == "START":
-        response = ("Welcome to Mindly 💙\n"
-                    "Please select your role:\n"
-                    "1️⃣ Student\n"
-                    "2️⃣ Doctor\n"
-                    "3️⃣ Other")
-        return response, "ROLE_SELECTION", {}
+        response = "Welcome to Mindly 💙\nYour mental health companion. Please select your role to get started:"
+        buttons = [
+            {"id": "ROLE_STUDENT", "title": "I'm a Student"},
+            {"id": "ROLE_DOCTOR", "title": "I'm a Doctor"},
+            {"id": "ROLE_OTHER", "title": "Other"}
+        ]
+        return response, "ROLE_SELECTION", {}, buttons
 
     elif state == "ROLE_SELECTION":
-        if text == "1":
-            response = ("Mindly - Student Menu 🎓\n"
-                        "Please select an option:\n"
-                        "1️⃣ Emotional Support Chat\n"
-                        "2️⃣ Book Counselling Session")
-            return response, "STUDENT_MENU", {"role": "Student"}
-        elif text == "2":
-            return "Mindly - Doctor Registration 🩺\n\nWhat is your full name?", "DR_REG_NAME", {"role": "Doctor"}
-        elif text == "3":
-            return "Thank you for reaching out. Please tell us how we can help you specifically.", "OTHER_FLOW", {"role": "Other"}
-        else:
-            return "Invalid selection. Please choose 1, 2, or 3.", "ROLE_SELECTION", data
+        if text == "ROLE_STUDENT":
+            response = "Welcome! What's your name?"
+            return response, "STUDENT_REG_NAME", {"role": "Student"}, None
+        elif text == "ROLE_DOCTOR":
+            return "Mindly - Doctor Registration 🩺\n\nWhat is your full name?", "DR_REG_NAME", {"role": "Doctor"}, None
+        elif text == "ROLE_OTHER":
+            return "Thank you! Please tell us how we can help you specifically.", "OTHER_FLOW", {"role": "Other"}, None
+
+    # --- STUDENT REGISTRATION (Simplified for persistence) ---
+    elif state == "STUDENT_REG_NAME":
+        data["name"] = text
+        # Auto-register student
+        db.users.insert_one({
+            "wa_id": wa_id,
+            "name": text,
+            "role": "student",
+            "created_at": datetime.datetime.utcnow()
+        })
+        response = f"Nice to meet you, {text}! 🎓\nHow can I help you today?"
+        buttons = [
+            {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+            {"id": "STUDENT_BOOK", "title": "Book Session"}
+        ]
+        return response, "STUDENT_MENU", data, buttons
 
     # --- DOCTOR REGISTRATION FLOW ---
     elif state == "DR_REG_NAME":
         data["name"] = text
-        return "What is your qualification? (e.g., MD, PhD)", "DR_REG_QUAL", data
+        return "What is your qualification? (e.g., MD, PhD)", "DR_REG_QUAL", data, None
     elif state == "DR_REG_QUAL":
         data["qualification"] = text
-        return "What is your medical license number?", "DR_REG_LICENSE", data
+        return "What is your medical license number?", "DR_REG_LICENSE", data, None
     elif state == "DR_REG_LICENSE":
         data["license"] = text
-        return "What are your working days? (e.g., Mon-Fri)", "DR_REG_DAYS", data
+        return "What are your working days? (e.g., Mon-Fri)", "DR_REG_DAYS", data, None
     elif state == "DR_REG_DAYS":
         data["working_days"] = text
-        return "What are your available time slots? (e.g., 9 AM - 5 PM)", "DR_REG_SLOTS", data
+        return "What are your available time slots? (e.g., 9 AM - 5 PM)", "DR_REG_SLOTS", data, None
     elif state == "DR_REG_SLOTS":
         data["slots"] = text
         summary = (f"Confirm your registration details:\n"
@@ -217,57 +250,127 @@ def handle_conversational_flow(wa_id, message_text, session):
                    f"• License: {data['license']}\n"
                    f"• Days: {data['working_days']}\n"
                    f"• Slots: {data['slots']}\n\n"
-                   "Is this correct? Reply YES to submit or NO to restart.")
-        return summary, "DR_REG_CONFIRM", data
+                   "Is this correct?")
+        buttons = [
+            {"id": "DR_CONFIRM_YES", "title": "YES, Correct"},
+            {"id": "DR_CONFIRM_NO", "title": "NO, Restart"}
+        ]
+        return summary, "DR_REG_CONFIRM", data, buttons
+    
     elif state == "DR_REG_CONFIRM":
-        if text.upper() == "YES":
+        if text == "DR_CONFIRM_YES":
+            db.users.insert_one({
+                "wa_id": wa_id,
+                "name": data["name"],
+                "role": "doctor",
+                "qualification": data["qualification"],
+                "license": data["license"],
+                "working_days": data["working_days"],
+                "available_slots": data["slots"],
+                "status": "pending",
+                "created_at": datetime.datetime.utcnow()
+            })
             return ("Thank you! Your registration will be reviewed and approved before activation. "
-                    "You will be notified once you are live."), "START", {}
+                    "You will be notified once you are live."), "START", {}, None
         else:
-            return "Let's start over. What is your full name?", "DR_REG_NAME", {"role": "Doctor"}
+            return "Let's start over. What is your full name?", "DR_REG_NAME", {"role": "Doctor"}, None
 
     # --- STUDENT FLOW ---
     elif state == "STUDENT_MENU":
-        if text == "1":
+        if text == "STUDENT_SUPPORT":
             return ("You are now in Emotional Support Mode. 💙\n"
-                    "Tell me what's on your mind. (Type 'MENU' anytime to exit)"), "EMOTIONAL_SUPPORT", data
-        elif text == "2":
-            return "Mindly - Session Booking 🗓️\n\nWhat is your preferred date? (e.g., 2024-05-20)", "BOOKING_DATE", data
-        else:
-            return "Invalid selection. Choose 1 for Support or 2 for Booking.", "STUDENT_MENU", data
+                    "Tell me what's on your mind. (Type 'MENU' anytime to exit)"), "EMOTIONAL_SUPPORT", data, None
+        elif text == "STUDENT_BOOK":
+            return "Mindly - Session Booking 🗓️\n\nWhat is your preferred date? (e.g., 2024-05-20)", "BOOKING_DATE", data, None
 
     elif state == "EMOTIONAL_SUPPORT":
         if text.upper() == "MENU":
-            return "Back to Student Menu:\n1️⃣ Support Chat\n2️⃣ Book Session", "STUDENT_MENU", data
+            response = "Back to Student Menu. What would you like to do?"
+            buttons = [
+                {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+                {"id": "STUDENT_BOOK", "title": "Book Session"}
+            ]
+            return response, "STUDENT_MENU", data, buttons
         
-        # Integrate Gemini Logic
         risk_level = classify_risk(text)
         ai_response = generate_mindly_response(text, risk_level)
-        return ai_response, "EMOTIONAL_SUPPORT", data
+        return ai_response, "EMOTIONAL_SUPPORT", data, None
 
     elif state == "BOOKING_DATE":
         data["booking_date"] = text
-        return "What time slot would you prefer? (e.g., 2:00 PM)", "BOOKING_TIME", data
+        return "What time slot would you prefer? (e.g., 2:00 PM)", "BOOKING_TIME", data, None
     elif state == "BOOKING_TIME":
         data["booking_time"] = text
-        return "Please give a short description of your concern.", "BOOKING_CONCERN", data
+        return "Please give a short description of your concern.", "BOOKING_CONCERN", data, None
     elif state == "BOOKING_CONCERN":
         data["concern"] = text
         summary = (f"Confirm Booking Request:\n"
                    f"• Date: {data['booking_date']}\n"
                    f"• Time: {data['booking_time']}\n"
-                   f"• Concern: {data['concern']}\n\n"
-                   "Reply YES to send to a counsellor.")
-        return summary, "BOOKING_CONFIRM", data
+                   f"• Concern: {data['concern']}")
+        buttons = [{"id": "BOOK_CONFIRM_YES", "title": "Confirm Booking"}]
+        return summary, "BOOKING_CONFIRM", data, buttons
+    
     elif state == "BOOKING_CONFIRM":
-        if text.upper() == "YES":
-            # Assume success for now
+        if text == "BOOK_CONFIRM_YES":
+            # Save booking to DB
+            db.counseling_sessions.insert_one({
+                "student_wa_id": wa_id,
+                "date": data["booking_date"],
+                "time": data["booking_time"],
+                "description": data["concern"],
+                "status": "Pending",
+                "created_at": datetime.datetime.utcnow()
+            })
             return ("Your request has been sent to an available counsellor. "
-                    "We will confirm shortly and send a video session link once approved. 💙"), "START", {}
+                    "We will confirm shortly and send a video session link once approved. 💙"), "START", {}, None
         else:
-            return "Booking cancelled. Back to Student Menu.", "STUDENT_MENU", data
+            return "Booking cancelled. Back to Student Menu.", "STUDENT_MENU", data, None
 
-    return "Hello! Type 'START' to welcome Mindly.", "START", {}
+    return "Hello! Type 'START' to welcome Mindly.", "START", {}, None
+
+def send_whatsapp_button_message(recipient_id, text, buttons):
+    """
+    Sends a message with native WhatsApp buttons (Quick Replies).
+    Maximum 3 buttons allowed for Quick Replies.
+    """
+    url = f"https://graph.facebook.com/v18.0/{Config.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {Config.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    formatted_buttons = []
+    for btn in buttons[:3]: # Meta limit is 3 buttons for quick_reply
+        formatted_buttons.append({
+            "type": "reply",
+            "reply": {
+                "id": btn["id"],
+                "title": btn["title"]
+            }
+        })
+        
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": text},
+            "action": {"buttons": formatted_buttons}
+        }
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error sending WhatsApp button message: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+             print(f"Response: {e.response.text}")
+        return None
 
 def send_whatsapp_message(recipient_id, message_text):
     """
