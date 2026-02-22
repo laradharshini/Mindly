@@ -224,7 +224,6 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             for i, sess in enumerate(pending_list):
                 student = db.users.find_one({"wa_id": sess["student_wa_id"]})
                 name = student.get("name", "Unknown") if student else "Unknown"
-                # Truncate name to ensure it fits in the 24-char limit (with index)
                 display_name = (name[:20] + '..') if len(name) > 20 else name
                 rows.append({
                     "id": f"DR_SEL_REQ_{sess['_id']}",
@@ -232,14 +231,23 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                     "description": f"{sess['date']} @ {sess['time']}"
                 })
             
+            # Bulk Actions Section
+            bulk_rows = [
+                {"id": "DR_BULK_APPROVE", "title": "Approve All ✅", "description": f"Approve all {len(pending_list)} requests"},
+                {"id": "DR_BULK_DECLINE", "title": "Decline All ❌", "description": "Decline all pending requests"}
+            ]
+            
             list_data = {
-                "button": "Select Request",
-                "sections": [{"title": "Pending Requests", "rows": rows}]
+                "button": "Select Action",
+                "sections": [
+                    {"title": "Pending Requests", "rows": rows},
+                    {"title": "Bulk Actions", "rows": bulk_rows}
+                ]
             }
-            return "Please select a student from the list to manage their request:", "DOCTOR_LIST_REQS", data, None, list_data
+            return "📋 *Select a student* to manage or use *Bulk Actions* below:", "DOCTOR_LIST_REQS", data, None, list_data
         
         elif text == "DR_DASHBOARD":
-            return "Refreshing dashboard...", "START", data, None, None
+            return "🔄 *Refreshing dashboard...*", "START", data, None, None
 
     elif state == "DOCTOR_LIST_REQS":
         if text.startswith("DR_SEL_REQ_"):
@@ -250,10 +258,10 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 student = db.users.find_one({"wa_id": sess["student_wa_id"]})
                 name = student.get("name", "Unknown") if student else "Unknown"
                 
-                response = (f"Managing Request for {name} 👤\n\n"
-                            f"📅 Date: {sess['date']}\n"
-                            f"🕒 Time: {sess['time']}\n"
-                            f"💬 Concern: {sess['description']}\n\n"
+                response = (f"👤 *Managing Request for:* {name}\n\n"
+                            f"�️ *Date:* {sess['date']}\n"
+                            f"🕒 *Time:* {sess['time']}\n"
+                            f"💬 *Concern:* {sess['description']}\n\n"
                             "What would you like to do?")
                 
                 buttons = [
@@ -263,11 +271,22 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 ]
                 return response, "DOCTOR_MANAGE_REQ", data, buttons, None
             
-            return "Request not found. Please try again.", "DOCTOR_LIST_REQS", data, None, None
+            return "⚠️ *Request not found.* Please try again.", "DOCTOR_LIST_REQS", data, None, None
+
+        elif text == "DR_BULK_APPROVE":
+            pending_list = list(db.counseling_sessions.find({"status": "Pending"}))
+            for sess in pending_list:
+                db.counseling_sessions.update_one({"_id": sess["_id"]}, {"$set": {"status": "Approved", "approved_by": wa_id}})
+                notif_msg = f"✅ *Approved:* Your session for {sess['date']} at {sess['time']} is confirmed! 🩺"
+                send_whatsapp_message(sess["student_wa_id"], notif_msg)
+            return f"✅ *Bulk Action:* {len(pending_list)} sessions approved!", "DOCTOR_DASHBOARD", data, [{"id": "DR_DASHBOARD", "title": "Dashboard"}], None
+
+        elif text == "DR_BULK_DECLINE":
+            res = db.counseling_sessions.update_many({"status": "Pending"}, {"$set": {"status": "Declined", "declined_by": wa_id}})
+            return f"❌ *Bulk Action:* {res.modified_count} sessions declined.", "DOCTOR_DASHBOARD", data, [{"id": "DR_DASHBOARD", "title": "Dashboard"}], None
 
     elif state == "DOCTOR_MANAGE_REQ":
         if text.startswith("DR_APPROVE_"):
-            # ... identical approval logic ...
             from bson import ObjectId
             session_id = text.replace("DR_APPROVE_", "")
             session_doc = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
@@ -277,14 +296,13 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                     {"_id": ObjectId(session_id)},
                     {"$set": {"status": "Approved", "approved_by": wa_id}}
                 )
-                notif_msg = (f"Your counselling session for {session_doc['date']} "
-                             f"at {session_doc['time']} has been APPROVED. 🩺")
+                notif_msg = (f"✅ *Approved:* Your session for {session_doc['date']} "
+                             f"at {session_doc['time']} is confirmed! 🩺")
                 send_whatsapp_message(session_doc["student_wa_id"], notif_msg)
                 
-                return "Session approved and student notified! ✅", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}], None
+                return "✅ *Session approved and student notified!*", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}], None
             
         elif text.startswith("DR_DECLINE_"):
-            # ... identical decline logic ...
             from bson import ObjectId
             session_id = text.replace("DR_DECLINE_", "")
             session_doc = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
@@ -294,31 +312,30 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                     {"_id": ObjectId(session_id)},
                     {"$set": {"status": "Declined", "declined_by": wa_id}}
                 )
-                notif_msg = (f"We're sorry, your counselling session for {session_doc['date']} "
-                             f"could not be approved at this time. 😔")
+                notif_msg = (f"😔 *Update:* Your session for {session_doc['date']} "
+                             f"could not be approved at this time.")
                 send_whatsapp_message(session_doc["student_wa_id"], notif_msg)
                 
-                return "Session declined and student notified. ❌", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}], None
+                return "❌ *Session declined and student notified.*", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}], None
         
         elif text == "DR_VIEW_REQS":
-            return "Returning to list...", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "Click to Reload"}], None
+            return "⬅️ *Returning to list...*", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "Click to Reload"}], None
 
     # --- STUDENT FLOW & SESSION MGMT ---
     elif state == "STUDENT_MENU":
         if text == "STUDENT_SUPPORT":
-            return ("You are now in Emotional Support Mode. 💙\n"
+            return ("🧠 *Emotional Support Mode* 💙\n"
                     "Tell me what's on your mind. (Type 'MENU' anytime to exit)"), "EMOTIONAL_SUPPORT", data, None, None
         elif text == "STUDENT_BOOK":
-            return "Mindly - Session Booking 🗓️\n\nWhat is your preferred date? (e.g., 2024-05-20)", "BOOKING_DATE", data, None, None
+            return "🗓️ *Session Booking*\n\nPlease type your preferred date (e.g., 2024-05-20):", "BOOKING_DATE", data, None, None
         elif text == "STUDENT_MY_SESSIONS":
-            # List all sessions (Pending/Approved)
             my_sessions = list(db.counseling_sessions.find({
                 "student_wa_id": wa_id,
                 "status": {"$in": ["Pending", "Approved"]}
             }).limit(10))
             
             if not my_sessions:
-                return "You have no active sessions at the moment.", "STUDENT_MENU", data, [{"id": "STUDENT_BOOK", "title": "Book One Now"}], None
+                return "⚠️ *No active sessions found.*", "STUDENT_MENU", data, [{"id": "STUDENT_BOOK", "title": "Book One Now"}], None
             
             rows = []
             for i, sess in enumerate(my_sessions):
@@ -329,10 +346,10 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 })
             
             list_data = {
-                "button": "Select Session",
+                "button": "View Session",
                 "sections": [{"title": "Your Sessions", "rows": rows}]
             }
-            return "Here are your active sessions. Select one to check details or cancel:", "STUDENT_MY_SESSIONS", data, None, list_data
+            return "📋 *Your Sessions:*\nSelect one below to view details or cancel:", "STUDENT_MY_SESSIONS", data, None, list_data
 
     elif state == "STUDENT_MY_SESSIONS":
         if text.startswith("STUDENT_SEL_SESS_"):
@@ -340,18 +357,18 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             session_id = text.replace("STUDENT_SEL_SESS_", "")
             sess = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
             if sess:
-                response = (f"Session Details 📋\n\n"
-                            f"📅 Date: {sess['date']}\n"
-                            f"🕒 Time: {sess['time']}\n"
-                            f"📊 Status: {sess['status']}\n"
-                            f"💬 Concern: {sess['description']}\n\n"
+                response = (f"📋 *Session Details*\n\n"
+                            f"�️ *Date:* {sess['date']}\n"
+                            f"🕒 *Time:* {sess['time']}\n"
+                            f"📊 *Status:* {sess['status']}\n"
+                            f"💬 *Concern:* {sess['description']}\n\n"
                             "What would you like to do?")
                 buttons = [
                     {"id": f"STUDENT_CANCEL_{session_id}", "title": "Cancel Session 🗑️"},
                     {"id": "STUDENT_MY_SESSIONS", "title": "Back to List ⬅️"}
                 ]
                 return response, "STUDENT_MANAGE_SESS", data, buttons, None
-        return "Back to Student Menu.", "START", data, None, None
+        return "⬅️ *Back to Student Menu.*", "START", data, None, None
 
     elif state == "STUDENT_MANAGE_SESS":
         if text.startswith("STUDENT_CANCEL_"):
@@ -361,11 +378,9 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 {"_id": ObjectId(session_id)},
                 {"$set": {"status": "Cancelled", "cancelled_by": "student"}}
             )
-            # Notify Doctor (Optional, but good practice)
-            # Find any active doctor? Or just acknowledge.
-            return "Session successfully cancelled. 🗑️", "START", data, None, None
+            return "🗑️ *Session successfully cancelled.*", "START", data, None, None
         elif text == "STUDENT_MY_SESSIONS":
-            return "Loading sessions...", "STUDENT_MENU", {"button_click": "STUDENT_MY_SESSIONS"}, [{"id": "STUDENT_MY_SESSIONS", "title": "View Again"}], None
+            return "🔄 *Loading sessions...*", "STUDENT_MENU", {"button_click": "STUDENT_MY_SESSIONS"}, [{"id": "STUDENT_MY_SESSIONS", "title": "View Again"}], None
 
     # ... (other student registration and booking states remain stable) ...
     elif state == "ROLE_SELECTION":
