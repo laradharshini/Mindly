@@ -230,7 +230,10 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             
             if "license_no" in flow_data: # Doctor Flow
                 data["license_no"] = flow_data["license_no"]
-                return ("🎊 *Registration Data Received!*\n\n"
+                data["available_dates"] = flow_data.get("available_dates", [])
+                data["available_times"] = flow_data.get("available_times", [])
+                
+                return ("🎊 *Registration & Availability Received!*\n\n"
                         f"Welcome, Dr. {data['name']}! 🩺\n"
                         "To finish your professional verification, please send a photo of your *Medical ID Card* now:"), "DR_REG_MEDICAL_ID", data, None, None
             else: # Student Flow
@@ -594,6 +597,8 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 "email": data["email"],
                 "phone": data["phone"],
                 "license_no": data["license_no"],
+                "available_dates": data.get("available_dates", []),
+                "available_times": data.get("available_times", []),
                 "medical_id": data["medical_id_img"],
                 "govt_id": data["govt_id_img"],
                 "role": "Doctor",

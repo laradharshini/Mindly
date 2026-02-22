@@ -40,14 +40,105 @@
                             },
                             {
                                 "type": "Footer",
-                                "label": "Continue to Upload IDs",
+                                "label": "Set Availability",
+                                "on-click-action": {
+                                    "name": "navigate",
+                                    "next": {
+                                        "type": "screen",
+                                        "name": "DOCTOR_AVAILABILITY",
+                                        "payload": {
+                                            "full_name": "${form.full_name}",
+                                            "email": "${form.email}",
+                                            "phone": "${form.phone}",
+                                            "license_no": "${form.license_no}"
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "DOCTOR_AVAILABILITY",
+            "title": "Set Your Availability",
+            "data": {
+                "full_name": {
+                    "type": "string",
+                    "__mapping": "data.full_name"
+                },
+                "email": {
+                    "type": "string",
+                    "__mapping": "data.email"
+                },
+                "phone": {
+                    "type": "string",
+                    "__mapping": "data.phone"
+                },
+                "license_no": {
+                    "type": "string",
+                    "__mapping": "data.license_no"
+                }
+            },
+            "layout": {
+                "type": "SingleColumnLayout",
+                "children": [
+                    {
+                        "type": "Form",
+                        "name": "availability_form",
+                        "children": [
+                            {
+                                "type": "TextCaption",
+                                "text": "Select your available dates and times for sessions."
+                            },
+                            {
+                                "type": "DatePicker",
+                                "name": "available_dates",
+                                "label": "Available Dates",
+                                "mode": "multiple",
+                                "required": true
+                            },
+                            {
+                                "type": "CheckboxGroup",
+                                "name": "available_times",
+                                "label": "Available Time Slots",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "id": "09:00",
+                                        "title": "09:00 AM"
+                                    },
+                                    {
+                                        "id": "11:00",
+                                        "title": "11:00 AM"
+                                    },
+                                    {
+                                        "id": "14:00",
+                                        "title": "02:00 PM"
+                                    },
+                                    {
+                                        "id": "16:00",
+                                        "title": "04:00 PM"
+                                    },
+                                    {
+                                        "id": "19:00",
+                                        "title": "07:00 PM"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "Footer",
+                                "label": "Complete Registration",
                                 "on-click-action": {
                                     "name": "complete",
                                     "payload": {
-                                        "full_name": "${form.full_name}",
-                                        "email": "${form.email}",
-                                        "phone": "${form.phone}",
-                                        "license_no": "${form.license_no}"
+                                        "full_name": "${data.full_name}",
+                                        "email": "${data.email}",
+                                        "phone": "${data.phone}",
+                                        "license_no": "${data.license_no}",
+                                        "available_dates": "${form.available_dates}",
+                                        "available_times": "${form.available_times}"
                                     }
                                 }
                             }
