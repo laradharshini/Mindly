@@ -95,7 +95,7 @@
                             {
                                 "type": "DatePicker",
                                 "name": "available_dates",
-                                "label": "Available Dates",
+                                "label": "Available Date",
                                 "required": true
                             },
                             {
@@ -222,12 +222,9 @@
                     "__example__": "L123"
                 },
                 "available_dates": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
+                    "type": "string",
                     "__mapping": "data.available_dates",
-                    "__example__": []
+                    "__example__": "2026-02-22"
                 },
                 "start_time": {
                     "type": "string",
