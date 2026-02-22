@@ -173,7 +173,13 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
     db = get_db()
     
     # Global Reset Command
-    if text.upper() in ["RESET", "START", "HI", "HELLO"]:
+    if text.upper() in ["RESET", "START", "HI", "HELLO", "TEST REGISTRATION"]:
+        # Special debug command to test the NEW registration flow
+        if text.upper() == "TEST REGISTRATION":
+            db.users.delete_one({"wa_id": wa_id})
+            db.sessions.delete_one({"wa_id": wa_id})
+            return "🗑️ *Test Mode:* Your old profile has been cleared.\nType 'HI' to start the new registration!", "START", {}, None, None
+
         # 1. Check if user already exists in DB
         user = db.users.find_one({"wa_id": wa_id})
         if user:
