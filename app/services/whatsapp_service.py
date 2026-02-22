@@ -237,14 +237,13 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 end_time = flow_data.get("end_time", "17:00")
                 data["available_times"] = [f"{start_time} - {end_time}"]
                 
-                # Extract Media Tokens from PhotoPicker
-                medical_photo_list = flow_data.get("medical_id", [])
-                if medical_photo_list and len(medical_photo_list) > 0:
-                    data["medical_id_img"] = medical_photo_list[0] # Take first photo
-                
-                govt_photo_list = flow_data.get("govt_id", [])
-                if govt_photo_list and len(govt_photo_list) > 0:
-                    data["govt_id_img"] = govt_photo_list[0]
+                # Extract Media Tokens from multi-photo picker
+                id_proofs = flow_data.get("id_proofs", [])
+                if len(id_proofs) >= 2:
+                    data["medical_id_img"] = id_proofs[0]
+                    data["govt_id_img"] = id_proofs[1]
+                elif len(id_proofs) == 1:
+                    data["medical_id_img"] = id_proofs[0]
 
                 # Finalize Dr Registration directly from Flow if IDs are provided
                 if data.get("medical_id_img") and data.get("govt_id_img"):
