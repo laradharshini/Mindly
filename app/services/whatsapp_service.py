@@ -304,9 +304,36 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                 actions.append({"id": "DR_BULK_SEL_APPROVE", "title": f"Approve Selected ({len(selected_ids)}) ✅", "description": "Approve all checked items"})
             actions.append({"id": "DR_VIEW_REQS", "title": "Back to Main Menu ⬅️", "description": "Exit Multi-Select"})
 
-            list_data = {"button": "Pick Students", "sections": [{"title": "Toggle to Select", "rows": rows}, {"title": "Action", "rows": actions}]}
-            return ("*Select Multiple Mode*\nTap students to add them to your selection (Checkbox: ☑️).\n"
-                    "Once done, click 'Approve Selected' at the bottom."), "DOCTOR_LIST_REQS", data, None, list_data
+            list_data = {"button": "Select Students", "sections": [{"title": "Toggle selection", "rows": rows}, {"title": "Action", "rows": actions}]}
+            
+            prompt = ("*Select Multiple Mode*\n"
+                      "Due to WhatsApp limits, you can pick one student at a time in the menu below. "
+                      "It will re-open with your update.\n\n"
+                      "🚀 *Turbo Tip:* Just *type* the numbers (e.g. `1,2,4`) to select many students at once!")
+            
+            return prompt, "DOCTOR_LIST_REQS", data, None, list_data
+
+        # Handle Numeric Selection (Turbo Mode)
+        elif any(char.isdigit() for char in (text if len(text) < 10 else "")): # Basic check for numbers in short messages
+            pending_list = list(db.counseling_sessions.find({"status": "Pending"}).limit(10))
+            selected_ids = data.get("selected_ids", [])
+            import re
+            numbers = re.findall(r'\d+', text)
+            
+            toggled_count = 0
+            for num_str in numbers:
+                try:
+                    idx = int(num_str) - 1
+                    if 0 <= idx < len(pending_list):
+                        sid = str(pending_list[idx]["_id"])
+                        if sid in selected_ids: selected_ids.remove(sid)
+                        else: selected_ids.append(sid)
+                        toggled_count += 1
+                except: continue
+            
+            data["selected_ids"] = selected_ids
+            # Re-trigger the same state handler to show the updated menu
+            return handle_conversational_flow(wa_id, "DR_MODE_MULTI_SELECT", data, is_button=True)
 
         # Final Approval for Selective Multi
         elif text == "DR_BULK_SEL_APPROVE":
