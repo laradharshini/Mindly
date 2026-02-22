@@ -224,15 +224,17 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             for i, sess in enumerate(pending_list):
                 student = db.users.find_one({"wa_id": sess["student_wa_id"]})
                 name = student.get("name", "Unknown") if student else "Unknown"
+                # Truncate name to ensure it fits in the 24-char limit (with index)
+                display_name = (name[:20] + '..') if len(name) > 20 else name
                 rows.append({
                     "id": f"DR_SEL_REQ_{sess['_id']}",
-                    "title": f"{i+1}. {name}",
+                    "title": f"{i+1}. {display_name}",
                     "description": f"{sess['date']} @ {sess['time']}"
                 })
             
             list_data = {
                 "button": "Select Request",
-                "sections": [{"title": "Pending Counselling Sessions", "rows": rows}]
+                "sections": [{"title": "Pending Requests", "rows": rows}]
             }
             return "Please select a student from the list to manage their request:", "DOCTOR_LIST_REQS", data, None, list_data
         
@@ -328,7 +330,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             
             list_data = {
                 "button": "Select Session",
-                "sections": [{"title": "Your Counselling Sessions", "rows": rows}]
+                "sections": [{"title": "Your Sessions", "rows": rows}]
             }
             return "Here are your active sessions. Select one to check details or cancel:", "STUDENT_MY_SESSIONS", data, None, list_data
 
