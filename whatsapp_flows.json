@@ -63,6 +63,8 @@
         {
             "id": "DOCTOR_AVAILABILITY",
             "title": "Set Your Availability",
+            "terminal": true,
+            "success": true,
             "data": {
                 "full_name": {
                     "type": "string",
