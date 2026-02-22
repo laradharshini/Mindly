@@ -185,9 +185,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                             f"• Pending Sessions: {pending_count}\n"
                             f"• Status: Active")
                 
-                buttons = []
-                if pending_count > 0:
-                    buttons.append({"id": "DR_VIEW_REQS", "title": "View Requests"})
+                buttons = [{"id": "DR_VIEW_REQS", "title": "View Requests"}]
                 
                 return response, "DOCTOR_DASHBOARD", {"role": "Doctor", "name": user["name"]}, buttons, None
             else:
