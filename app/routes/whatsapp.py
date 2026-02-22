@@ -13,13 +13,15 @@ def verify_webhook():
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
 
-    if mode and token:
-        if mode == 'subscribe' and token == Config.WHATSAPP_VERIFY_TOKEN:
-            print("WEBHOOK_VERIFIED")
-            return challenge, 200
-        else:
-            return "Verification failed", 403
-    return "Verification failed", 400
+    # If this is a manual browser visit (no mode), return a success message
+    if not mode:
+        return "Webhook active and listening.", 200
+
+    if mode == 'subscribe' and token == Config.WHATSAPP_VERIFY_TOKEN:
+        print("WEBHOOK_VERIFIED")
+        return challenge, 200
+    else:
+        return "Verification failed", 403
 
 @whatsapp_bp.route('/webhook', methods=['POST'])
 def handle_message():
