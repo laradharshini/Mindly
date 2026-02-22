@@ -94,8 +94,14 @@
                         "children": [
                             {
                                 "type": "DatePicker",
-                                "name": "available_dates",
-                                "label": "Available Date",
+                                "name": "from_date",
+                                "label": "From Date",
+                                "required": true
+                            },
+                            {
+                                "type": "DatePicker",
+                                "name": "to_date",
+                                "label": "To Date",
                                 "required": true
                             },
                             {
@@ -184,7 +190,8 @@
                                         "email": "${data.email}",
                                         "phone": "${data.phone}",
                                         "license_no": "${data.license_no}",
-                                        "available_dates": "${form.available_dates}",
+                                        "from_date": "${form.from_date}",
+                                        "to_date": "${form.to_date}",
                                         "start_time": "${form.start_time}",
                                         "end_time": "${form.end_time}"
                                     }
@@ -197,7 +204,7 @@
         },
         {
             "id": "DOCTOR_VERIFICATION",
-            "title": "ID Verification",
+            "title": "Verification",
             "terminal": true,
             "success": true,
             "data": {
@@ -221,10 +228,15 @@
                     "__mapping": "data.license_no",
                     "__example__": "L123"
                 },
-                "available_dates": {
+                "from_date": {
                     "type": "string",
-                    "__mapping": "data.available_dates",
-                    "__example__": "2026-02-22"
+                    "__mapping": "data.from_date",
+                    "__example__": "2026-01-01"
+                },
+                "to_date": {
+                    "type": "string",
+                    "__mapping": "data.to_date",
+                    "__example__": "2026-01-07"
                 },
                 "start_time": {
                     "type": "string",
@@ -247,14 +259,14 @@
                             {
                                 "type": "PhotoPicker",
                                 "name": "id_proofs",
-                                "label": "Identity Proof",
-                                "description": "Please select 2 photos: Medical ID and Government ID Card.",
+                                "label": "Upload Identity Proof",
+                                "description": "Select 2 photos: Medical ID & Govt ID.",
                                 "min-uploaded-photos": 2,
                                 "max-uploaded-photos": 2
                             },
                             {
                                 "type": "Footer",
-                                "label": "Complete Registration",
+                                "label": "Complete Setup",
                                 "on-click-action": {
                                     "name": "complete",
                                     "payload": {
@@ -262,7 +274,8 @@
                                         "email": "${data.email}",
                                         "phone": "${data.phone}",
                                         "license_no": "${data.license_no}",
-                                        "available_dates": "${data.available_dates}",
+                                        "from_date": "${data.from_date}",
+                                        "to_date": "${data.to_date}",
                                         "start_time": "${data.start_time}",
                                         "end_time": "${data.end_time}",
                                         "id_proofs": "${form.id_proofs}"

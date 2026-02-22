@@ -230,7 +230,8 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             
             if "license_no" in flow_data: # Doctor Flow
                 data["license_no"] = flow_data["license_no"]
-                data["available_dates"] = flow_data.get("available_dates", [])
+                data["available_from_date"] = flow_data.get("from_date")
+                data["available_to_date"] = flow_data.get("to_date")
                 
                 # Extract Times
                 start_time = flow_data.get("start_time", "09:00")
@@ -252,7 +253,8 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
                         "email": data["email"],
                         "phone": data["phone"],
                         "license_no": data["license_no"],
-                        "available_dates": data["available_dates"],
+                        "available_from_date": data.get("available_from_date"),
+                        "available_to_date": data.get("available_to_date"),
                         "available_times": data["available_times"],
                         "medical_id": data["medical_id_img"],
                         "govt_id": data["govt_id_img"],
