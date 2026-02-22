@@ -649,9 +649,21 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
 
     elif state == "ROLE_SELECTION":
         if text == "ROLE_STUDENT":
-            return "Welcome! What's your name?", "STUDENT_REG_NAME", {"role": "Student"}, None, None
+            # Student Flow
+            return ("Welcome! Please complete the registration form:"), "START", {"role": "Student"}, None, {
+                "type": "flow",
+                "flow_id": Config.WHATSAPP_FLOW_ID,
+                "flow_token": f"student_{wa_id}",
+                "button": "Fill Form 🎓"
+            }
         elif text == "ROLE_DOCTOR":
-            return "Mindly - Doctor Registration 🩺\n\nWhat is your full name?", "DR_REG_NAME", {"role": "Doctor"}, None, None
+            # Doctor Flow
+            return ("Mindly - Doctor Onboarding 🩺\n\nPlease complete the verification carefully:"), "START", {"role": "Doctor"}, None, {
+                "type": "flow",
+                "flow_id": Config.WHATSAPP_FLOW_ID,
+                "flow_token": f"doctor_{wa_id}",
+                "button": "Start Onboarding 🩺"
+            }
         elif text == "ROLE_OTHER":
             return "Thank you! Please tell us how we can help you specifically.", "OTHER_FLOW", {"role": "Other"}, None, None
 
@@ -750,6 +762,51 @@ def send_whatsapp_button_message(recipient_id, text, buttons):
         return response.json()
     except Exception as e:
         print(f"Error sending WhatsApp button message: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+             print(f"Response: {e.response.text}")
+        return None
+
+def send_whatsapp_flow_message(recipient_id, text, flow_data):
+    """
+    Sends a native WhatsApp Flow message.
+    """
+    url = f"https://graph.facebook.com/v18.0/{Config.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {Config.WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient_id,
+        "type": "interactive",
+        "interactive": {
+            "type": "flow",
+            "body": {"text": text},
+            "footer": {"text": "Mindly Security Verified"},
+            "action": {
+                "name": "flow",
+                "parameters": {
+                    "flow_message_version": "3",
+                    "flow_token": flow_data["flow_token"],
+                    "flow_id": flow_data["flow_id"],
+                    "flow_cta": flow_data["button"],
+                    "flow_action": "navigate",
+                    "flow_action_payload": {
+                        "screen": "DOCTOR_REGISTRATION"
+                    }
+                }
+            }
+        }
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error sending WhatsApp flow message: {e}")
         if hasattr(e, 'response') and e.response is not None:
              print(f"Response: {e.response.text}")
         return None

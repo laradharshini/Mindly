@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.config import Config
-from app.services.whatsapp_service import handle_conversational_flow, send_whatsapp_message, send_whatsapp_button_message, send_whatsapp_list_message
+from app.services.whatsapp_service import handle_conversational_flow, send_whatsapp_message, send_whatsapp_button_message, send_whatsapp_list_message, send_whatsapp_flow_message
 from app.services.session_service import get_user_session, update_user_session
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
@@ -86,9 +86,12 @@ def handle_message():
                             # 3. Update session in DB
                             update_user_session(sender_id, state=next_state, data=updated_data)
                             
-                            # 4. Send response (List, Button or Text)
+                            # 4. Send response (List, Button, Flow or Text)
                             if list_data:
-                                send_whatsapp_list_message(sender_id, response_text, list_data)
+                                if isinstance(list_data, dict) and list_data.get("type") == "flow":
+                                    send_whatsapp_flow_message(sender_id, response_text, list_data)
+                                else:
+                                    send_whatsapp_list_message(sender_id, response_text, list_data)
                             elif buttons:
                                 send_whatsapp_button_message(sender_id, response_text, buttons)
                             else:
