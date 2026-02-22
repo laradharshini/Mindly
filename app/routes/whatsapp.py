@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.config import Config
-from app.services.whatsapp_service import handle_conversational_flow, send_whatsapp_message, send_whatsapp_button_message
+from app.services.whatsapp_service import handle_conversational_flow, send_whatsapp_message, send_whatsapp_button_message, send_whatsapp_list_message
 from app.services.session_service import get_user_session, update_user_session
 
 whatsapp_bp = Blueprint('whatsapp', __name__)
@@ -27,7 +27,7 @@ def verify_webhook():
 @whatsapp_bp.route('/webhook', methods=['POST'])
 def handle_message():
     """
-    Handles incoming messages (text and buttons) from WhatsApp with state management.
+    Handles incoming messages (text, buttons, and lists) from WhatsApp.
     """
     data = request.get_json()
     
@@ -48,27 +48,33 @@ def handle_message():
                         if message.get('type') == 'text':
                             user_text = message.get('text', {}).get('body')
                         
-                        # Handle Button Replies (Interactive)
+                        # Handle Button Replies
                         elif message.get('type') == 'interactive':
                             interactive = message.get('interactive', {})
                             if interactive.get('type') == 'button_reply':
                                 user_text = interactive.get('button_reply', {}).get('id')
                                 is_button = True
+                            # Handle List Replies
+                            elif interactive.get('type') == 'list_reply':
+                                user_text = interactive.get('list_reply', {}).get('id')
+                                is_button = True # Treat list selection as a button/id interaction
                         
                         if user_text:
                             # 1. Get current session
                             session = get_user_session(sender_id)
                             
                             # 2. Process conversation flow
-                            response_text, next_state, updated_data, buttons = handle_conversational_flow(
+                            response_text, next_state, updated_data, buttons, list_data = handle_conversational_flow(
                                 sender_id, user_text, session, is_button=is_button
                             )
                             
                             # 3. Update session in DB
                             update_user_session(sender_id, state=next_state, data=updated_data)
                             
-                            # 4. Send response (Button or Text)
-                            if buttons:
+                            # 4. Send response (List, Button or Text)
+                            if list_data:
+                                send_whatsapp_list_message(sender_id, response_text, list_data)
+                            elif buttons:
                                 send_whatsapp_button_message(sender_id, response_text, buttons)
                             else:
                                 send_whatsapp_message(sender_id, response_text)
