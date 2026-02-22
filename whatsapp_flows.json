@@ -1,0 +1,60 @@
+{
+    "version": "2.1",
+    "screens": [
+        {
+            "id": "DOCTOR_REGISTRATION",
+            "title": "Doctor Onboarding",
+            "data": {},
+            "layout": {
+                "type": "SingleColumnLayout",
+                "children": [
+                    {
+                        "type": "Form",
+                        "name": "registration_form",
+                        "children": [
+                            {
+                                "type": "TextInput",
+                                "name": "full_name",
+                                "label": "Full Name",
+                                "required": true
+                            },
+                            {
+                                "type": "TextInput",
+                                "name": "email",
+                                "label": "Email Address",
+                                "input-type": "email",
+                                "required": true
+                            },
+                            {
+                                "type": "TextInput",
+                                "name": "phone",
+                                "label": "Phone Number",
+                                "input-type": "phone",
+                                "required": true
+                            },
+                            {
+                                "type": "TextInput",
+                                "name": "license_no",
+                                "label": "Medical License Number",
+                                "required": true
+                            },
+                            {
+                                "type": "Footer",
+                                "label": "Continue to Upload IDs",
+                                "on-click-action": {
+                                    "name": "complete",
+                                    "payload": {
+                                        "full_name": "${form.full_name}",
+                                        "email": "${form.email}",
+                                        "phone": "${form.phone}",
+                                        "license_no": "${form.license_no}"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

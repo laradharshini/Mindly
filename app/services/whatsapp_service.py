@@ -212,10 +212,42 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         user = db.users.find_one({"wa_id": wa_id})
         if user:
             role = user.get("role", "student").capitalize()
-            if role == "Doctor":
-                return handle_conversational_flow(wa_id, "START", session, is_button=True) # Let the global handler deal with it
-            else:
-                return handle_conversational_flow(wa_id, "START", session, is_button=True)
+            # If Doctor/Student exists, use logic to re-trigger current state
+            return handle_conversational_flow(wa_id, "START", session, is_button=True)
+
+        # Flow Submission Handler (Native Form Data)
+        if text.startswith("FLOW_SUBMIT_"):
+            flow_data = session.get("flow_response", {})
+            if not flow_data:
+                return "❌ Error: Flow data lost. Please try the text registration below.", "START", {}, None, None
+            
+            # Map Flow fields to Database fields
+            data.update({
+                "name": flow_data.get("full_name"),
+                "email": flow_data.get("email"),
+                "phone": flow_data.get("phone")
+            })
+            
+            if "license_no" in flow_data: # Doctor Flow
+                data["license_no"] = flow_data["license_no"]
+                return ("🎊 *Registration Data Received!*\n\n"
+                        f"Welcome, Dr. {data['name']}! 🩺\n"
+                        "To finish your professional verification, please send a photo of your *Medical ID Card* now:"), "DR_REG_MEDICAL_ID", data, None, None
+            else: # Student Flow
+                db.users.update_one({"wa_id": wa_id}, {"$set": {
+                    "name": data["name"],
+                    "email": data["email"],
+                    "phone": data["phone"],
+                    "role": "Student",
+                    "registered_at": datetime.utcnow()
+                }}, upsert=True)
+                return (f"🎊 *Registration Complete!*\n\n"
+                        f"Welcome, {data['name']}! 🎓\n"
+                        "How can I support you today?"), "STUDENT_MENU", data, [
+                    {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+                    {"id": "STUDENT_BOOK", "title": "Book Session"},
+                    {"id": "STUDENT_MY_SESSIONS", "title": "My Sessions"}
+                ], None
 
         response = "Welcome to Mindly 💙\nYour mental health companion. Please select your role to get started:"
         buttons = [

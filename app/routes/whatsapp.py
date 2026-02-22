@@ -58,6 +58,15 @@ def handle_message():
                             elif interactive.get('type') == 'list_reply':
                                 user_text = interactive.get('list_reply', {}).get('id')
                                 is_button = True # Treat list selection as a button/id interaction
+                            # Handle WhatsApp Flow Replies
+                            elif interactive.get('type') == 'nfm_reply':
+                                import json
+                                nfm_reply = interactive.get('nfm_reply', {})
+                                response_data = json.loads(nfm_reply.get('response_json', '{}'))
+                                user_text = f"FLOW_SUBMIT_{nfm_reply.get('name', 'unknown')}"
+                                # We'll store the flow data in updated_data later
+                                session['flow_response'] = response_data
+                                is_button = True
                         
                         # Handle Image Messages
                         elif message.get('type') == 'image':
