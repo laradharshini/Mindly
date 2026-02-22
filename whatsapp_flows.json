@@ -245,7 +245,7 @@
                                 "name": "start_time",
                                 "label": "Start Time",
                                 "required": true,
-                                "options": [
+                                "data-source": [
                                     {
                                         "id": "09:00",
                                         "title": "09:00 AM"
@@ -301,7 +301,7 @@
                                 "name": "end_time",
                                 "label": "End Time",
                                 "required": true,
-                                "options": [
+                                "data-source": [
                                     {
                                         "id": "10:00",
                                         "title": "10:00 AM"
