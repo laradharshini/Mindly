@@ -333,7 +333,8 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             
             data["selected_ids"] = selected_ids
             # Re-trigger the same state handler to show the updated menu
-            return handle_conversational_flow(wa_id, "DR_MODE_MULTI_SELECT", data, is_button=True)
+            # Pass the full session object (state + data) for the recursive call
+            return handle_conversational_flow(wa_id, "DR_MODE_MULTI_SELECT", {"state": "DOCTOR_LIST_REQS", "data": data}, is_button=True)
 
         # Final Approval for Selective Multi
         elif text == "DR_BULK_SEL_APPROVE":
