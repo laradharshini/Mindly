@@ -399,15 +399,56 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         elif text == "STUDENT_MY_SESSIONS":
             return "*Loading sessions...*", "STUDENT_MENU", {"button_click": "STUDENT_MY_SESSIONS"}, [{"id": "STUDENT_MY_SESSIONS", "title": "View Again"}], None
 
-    # ... (other student registration and booking states remain stable) ...
+    elif state == "STUDENT_REG_NAME":
+        data["name"] = text
+        wa_id = data.get("wa_id")
+        db.users.update_one({"wa_id": wa_id}, {"$set": {"name": text, "role": "Student"}}, upsert=True)
+        return f"Nice to meet you, {text}! 🎓\nHow can I support you today?", "STUDENT_MENU", data, [
+            {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+            {"id": "STUDENT_BOOK", "title": "Book Session"},
+            {"id": "STUDENT_MY_SESSIONS", "title": "My Sessions"}
+        ], None
+
+    elif state == "BOOKING_DATE":
+        data["booking_date"] = text
+        return "Got it! 🗓️ What *time* would you prefer? (e.g., 2:00 PM)", "BOOKING_TIME", data, None, None
+
+    elif state == "BOOKING_TIME":
+        data["booking_time"] = text
+        return "Understood. 🧠 Briefly describe your *concern* or what you'd like to talk about:", "BOOKING_DESC", data, None, None
+
+    elif state == "BOOKING_DESC":
+        from datetime import datetime
+        new_session = {
+            "student_wa_id": wa_id,
+            "date": data["booking_date"],
+            "time": data["booking_time"],
+            "description": text,
+            "status": "Pending",
+            "created_at": datetime.utcnow()
+        }
+        db.counseling_sessions.insert_one(new_session)
+        # Notify Doctors (Optional but good)
+        return ("✅ *Booking Request Sent!* 🚀\n\nA doctor will review your request soon. You'll be notified once it's approved."), "STUDENT_MENU", data, [
+            {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
+            {"id": "STUDENT_BOOK", "title": "Book Another"},
+            {"id": "STUDENT_MY_SESSIONS", "title": "My Sessions"}
+        ], None
+
+    elif state == "DR_REG_NAME":
+        db.users.update_one({"wa_id": wa_id}, {"$set": {"name": text, "role": "Doctor", "status": "Active"}}, upsert=True)
+        return f"Welcome, Dr. {text}! 🩺\nYour dashboard is ready.", "START", data, None, None
+
     elif state == "ROLE_SELECTION":
         if text == "ROLE_STUDENT":
-            response = "Welcome! What's your name?"
-            return response, "STUDENT_REG_NAME", {"role": "Student"}, None, None
+            return "Welcome! What's your name?", "STUDENT_REG_NAME", {"role": "Student"}, None, None
         elif text == "ROLE_DOCTOR":
             return "Mindly - Doctor Registration 🩺\n\nWhat is your full name?", "DR_REG_NAME", {"role": "Doctor"}, None, None
         elif text == "ROLE_OTHER":
             return "Thank you! Please tell us how we can help you specifically.", "OTHER_FLOW", {"role": "Other"}, None, None
+
+    elif state == "OTHER_FLOW":
+        return "Thank you for sharing. We will get back to you soon.", "START", {}, None, None
 
     # --- Catch All ---
     return "Hello! Type 'START' to welcome Mindly.", "START", {}, None, None
