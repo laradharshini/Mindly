@@ -144,20 +144,25 @@ def classify_risk(user_message):
             return "LOW"
         return risk_level
     except Exception as e:
-        print(f"Error in risk classification: {e}")
+        print(f"CRITICAL: Error in risk classification: {e}")
+        import traceback
+        traceback.print_exc()
         return "LOW"
 
 def generate_mindly_response(user_message, risk_level):
     """
     Generates a Mindly response based on user message and risk level.
     """
+    print(f"DEBUG: Generating Mindly response for risk level: {risk_level}")
     try:
         model = genai.GenerativeModel('gemini-pro')
         prompt = MINDLY_SYSTEM_PROMPT.format(risk_level=risk_level)
         response = model.generate_content(f"{prompt}\n\nUser message: {user_message}")
         return response.text
     except Exception as e:
-        print(f"Error in Mindly response generation: {e}")
+        print(f"CRITICAL: Error in Mindly response generation: {e}")
+        import traceback
+        traceback.print_exc()
         return "I'm here for you and I want to help. Would you like to tell me more about what's on your mind?"
 
 def send_whatsapp_message(recipient_id, message_text):
