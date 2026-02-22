@@ -213,56 +213,105 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         ]
         return response, "ROLE_SELECTION", {}, buttons
 
-    # --- DOCTOR DASHBOARD PERSISTENCE ---
+    # --- DOCTOR DASHBOARD & NAVIGATION ---
     elif state == "DOCTOR_DASHBOARD":
         if text == "DR_VIEW_REQS":
-            # Fetch pending sessions
+            # State: List pending requests
             pending_list = list(db.counseling_sessions.find({"status": "Pending"}).limit(3))
             if not pending_list:
-                return "No pending requests at the moment.", "DOCTOR_DASHBOARD", data, None
+                return "No pending requests at the moment. 🎉", "DOCTOR_DASHBOARD", data, None
             
             response = "Mindly - Pending Requests 🗓️\n\n"
+            buttons = []
             for i, sess in enumerate(pending_list):
-                # Retrieve student name if possible
                 student = db.users.find_one({"wa_id": sess["student_wa_id"]})
-                name = student.get("name", "Unknown Student") if student else "Unknown Student"
-                response += f"{i+1}. {name}\n📅 {sess['date']} @ {sess['time']}\n💬 {sess['description']}\n\n"
+                name = student.get("name", "Unknown") if student else "Unknown"
+                response += f"{i+1}️⃣ {name}\n📅 {sess['date']} @ {sess['time']}\n\n"
+                buttons.append({"id": f"DR_MANAGE_{i}", "title": f"Manage #{i+1}"})
             
-            response += "Would you like to approve the oldest request?"
-            buttons = [
-                {"id": f"DR_APPROVE_{pending_list[0]['_id']}", "title": "Approve Oldest"},
-                {"id": "DR_DASHBOARD", "title": "Back to Dashboard"}
-            ]
-            return response, "DOCTOR_PROCESS_REQS", data, buttons
+            buttons.append({"id": "DR_DASHBOARD", "title": "Dashboard"})
+            
+            # Store the current list IDs in session data for selection
+            data["current_list_ids"] = [str(s["_id"]) for s in pending_list]
+            return response, "DOCTOR_LIST_REQS", data, buttons
         
         elif text == "DR_DASHBOARD":
-            # Redirect to START which will re-trigger the Welcome/Dashboard logic
             return "Refreshing dashboard...", "START", data, None
 
-    elif state == "DOCTOR_PROCESS_REQS":
+    elif state == "DOCTOR_LIST_REQS":
+        if text.startswith("DR_MANAGE_"):
+            index = int(text.replace("DR_MANAGE_", ""))
+            list_ids = data.get("current_list_ids", [])
+            
+            if index < len(list_ids):
+                from bson import ObjectId
+                session_id = list_ids[index]
+                sess = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
+                if sess:
+                    student = db.users.find_one({"wa_id": sess["student_wa_id"]})
+                    name = student.get("name", "Unknown") if student else "Unknown"
+                    
+                    response = (f"Managing Request for {name} 👤\n\n"
+                                f"📅 Date: {sess['date']}\n"
+                                f"🕒 Time: {sess['time']}\n"
+                                f"💬 Concern: {sess['description']}\n\n"
+                                "What would you like to do?")
+                    
+                    data["active_session_id"] = session_id
+                    buttons = [
+                        {"id": f"DR_APPROVE_{session_id}", "title": "Approve ✅"},
+                        {"id": f"DR_DECLINE_{session_id}", "title": "Decline ❌"},
+                        {"id": "DR_VIEW_REQS", "title": "Back to List ⬅️"}
+                    ]
+                    return response, "DOCTOR_MANAGE_REQ", data, buttons
+            
+            return "Request not found. Please try again.", "DOCTOR_LIST_REQS", data, None
+
+        elif text == "DR_VIEW_REQS":
+            # Re-trigger list logic
+            return "Loading list...", "DOCTOR_DASHBOARD", data, None
+        
+        elif text == "DR_DASHBOARD":
+            return "Returning to dashboard...", "START", data, None
+
+    elif state == "DOCTOR_MANAGE_REQ":
         if text.startswith("DR_APPROVE_"):
             from bson import ObjectId
             session_id = text.replace("DR_APPROVE_", "")
-            
-            # Fetch session to get student_wa_id
             session_doc = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
+            
             if session_doc:
                 db.counseling_sessions.update_one(
                     {"_id": ObjectId(session_id)},
                     {"$set": {"status": "Approved", "approved_by": wa_id}}
                 )
-                
                 # Notify Student
-                student_id = session_doc["student_wa_id"]
-                notif_msg = (f"Great news! Your counselling session request for {session_doc['date']} "
-                             f"at {session_doc['time']} has been APPROVED by Dr. {data.get('name', 'a Mindly Professional')}. 🩺\n\n"
-                             f"A video link will be shared via WhatsApp shortly before the session.")
-                send_whatsapp_message(student_id, notif_msg)
+                notif_msg = (f"Your counselling session for {session_doc['date']} "
+                             f"at {session_doc['time']} has been APPROVED. 🩺")
+                send_whatsapp_message(session_doc["student_wa_id"], notif_msg)
                 
-                return "Session approved! The student has been notified. 🩺", "START", data, None
-            return "Error: Session not found.", "START", data, None
-        else:
-            return "Back to Dashboard.", "START", data, None
+                return "Session approved and student notified! ✅", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}]
+            
+        elif text.startswith("DR_DECLINE_"):
+            from bson import ObjectId
+            session_id = text.replace("DR_DECLINE_", "")
+            session_doc = db.counseling_sessions.find_one({"_id": ObjectId(session_id)})
+            
+            if session_doc:
+                db.counseling_sessions.update_one(
+                    {"_id": ObjectId(session_id)},
+                    {"$set": {"status": "Declined", "declined_by": wa_id}}
+                )
+                # Notify Student
+                notif_msg = (f"We're sorry, your counselling session for {session_doc['date']} "
+                             f"could not be approved at this time. 😔")
+                send_whatsapp_message(session_doc["student_wa_id"], notif_msg)
+                
+                return "Session declined and student notified. ❌", "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View More"}]
+        
+        elif text == "DR_VIEW_REQS":
+            # Go back to list
+            return "Returning to list...", "DOCTOR_DASHBOARD", data, None
 
     elif state == "ROLE_SELECTION":
         if text == "ROLE_STUDENT":
