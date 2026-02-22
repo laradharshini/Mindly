@@ -59,6 +59,12 @@ def handle_message():
                                 user_text = interactive.get('list_reply', {}).get('id')
                                 is_button = True # Treat list selection as a button/id interaction
                         
+                        # Handle Image Messages
+                        elif message.get('type') == 'image':
+                            image_id = message.get('image', {}).get('id')
+                            user_text = f"MEDIA_IMAGE_{image_id}"
+                            is_button = True # Treat media as a special automated interaction
+                        
                         if user_text:
                             # 1. Get current session
                             session = get_user_session(sender_id)

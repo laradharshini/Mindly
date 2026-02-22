@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import requests
 import json
-import datetime
+from datetime import datetime, timedelta
 from app.config import Config
 from app.database import get_db
 
@@ -202,7 +202,15 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         data = {}
 
     if state == "START":
-        # ... (rest of the code remains similar)
+        # Silent redirect for existing users who are in START state
+        user = db.users.find_one({"wa_id": wa_id})
+        if user:
+            role = user.get("role", "student").capitalize()
+            if role == "Doctor":
+                return handle_conversational_flow(wa_id, "START", session, is_button=True) # Let the global handler deal with it
+            else:
+                return handle_conversational_flow(wa_id, "START", session, is_button=True)
+
         response = "Welcome to Mindly 💙\nYour mental health companion. Please select your role to get started:"
         buttons = [
             {"id": "ROLE_STUDENT", "title": "I'm a Student"},
@@ -213,7 +221,7 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
 
     # --- DOCTOR DASHBOARD & 2-STEP MGMT ---
     elif state == "DOCTOR_DASHBOARD":
-        if text == "DR_VIEW_REQS":
+        if text.upper() in ["DR_VIEW_REQS", "VIEW REQUESTS"]:
             pending_list = list(db.counseling_sessions.find({"status": "Pending"}).limit(10))
             if not pending_list:
                 return "*No pending requests at the moment.*", "DOCTOR_DASHBOARD", data, None, None
@@ -372,7 +380,23 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
             return ("*Emotional Support Mode* 💙\n"
                     "Tell me what's on your mind. (Type 'MENU' anytime to exit)"), "EMOTIONAL_SUPPORT", data, None, None
         elif text == "STUDENT_BOOK":
-            return "*Session Booking*\n\nPlease type your preferred date (e.g., 2024-05-20):", "BOOKING_DATE", data, None, None
+            from datetime import datetime, timedelta
+            today = datetime.now()
+            rows = []
+            for i in range(7):
+                date = today + timedelta(days=i)
+                date_str = date.strftime("%Y-%m-%d")
+                rows.append({
+                    "id": f"BOOK_DATE_{date_str}",
+                    "title": date.strftime("%A, %b %d"),
+                    "description": "Select this day"
+                })
+            
+            list_data = {
+                "button": "Choose Date",
+                "sections": [{"title": "Select a Day", "rows": rows}]
+            }
+            return "*Session Booking* 🗓️\nPlease select a date for your session:", "BOOKING_DATE", data, None, list_data
         elif text == "STUDENT_MY_SESSIONS":
             my_sessions = list(db.counseling_sessions.find({
                 "student_wa_id": wa_id,
@@ -429,24 +453,56 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
 
     elif state == "STUDENT_REG_NAME":
         data["name"] = text
-        wa_id = data.get("wa_id")
-        db.users.update_one({"wa_id": wa_id}, {"$set": {"name": text, "role": "Student"}}, upsert=True)
-        return f"Nice to meet you, {text}! 🎓\nHow can I support you today?", "STUDENT_MENU", data, [
+        return f"Welcome, {text}! 🎓\n\nWhat is your *Email Address*?", "STUDENT_REG_EMAIL", data, None, None
+
+    elif state == "STUDENT_REG_EMAIL":
+        import re
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
+            return "❌ Invalid email format. Please try again:", "STUDENT_REG_EMAIL", data, None, None
+        data["email"] = text
+        return "Got it. What is your *Phone Number*? (with country code):", "STUDENT_REG_PHONE", data, None, None
+
+    elif state == "STUDENT_REG_PHONE":
+        data["phone"] = text
+        db.users.update_one({"wa_id": wa_id}, {"$set": {
+            "name": data["name"],
+            "email": data["email"],
+            "phone": data["phone"],
+            "role": "Student",
+            "registered_at": datetime.utcnow()
+        }}, upsert=True)
+        
+        return f"Nice to meet you, {data['name']}! 🎓\nHow can I support you today?", "STUDENT_MENU", data, [
             {"id": "STUDENT_SUPPORT", "title": "Support Chat"},
             {"id": "STUDENT_BOOK", "title": "Book Session"},
             {"id": "STUDENT_MY_SESSIONS", "title": "My Sessions"}
         ], None
 
     elif state == "BOOKING_DATE":
-        data["booking_date"] = text
-        return "Got it! 🗓️ What *time* would you prefer? (e.g., 2:00 PM)", "BOOKING_TIME", data, None, None
+        if text.startswith("BOOK_DATE_"):
+            data["booking_date"] = text.replace("BOOK_DATE_", "")
+            
+            time_slots = [
+                {"id": "TIME_0900", "title": "09:00 AM", "description": "Morning"},
+                {"id": "TIME_1100", "title": "11:00 AM", "description": "Morning"},
+                {"id": "TIME_1400", "title": "02:00 PM", "description": "Afternoon"},
+                {"id": "TIME_1600", "title": "04:00 PM", "description": "Afternoon"},
+                {"id": "TIME_1900", "title": "07:00 PM", "description": "Evening"}
+            ]
+            list_data = {
+                "button": "Choose Time",
+                "sections": [{"title": "Available Slots", "rows": time_slots}]
+            }
+            return "Great! 🗓️ Now, pick a *time* that works for you:", "BOOKING_TIME", data, None, list_data
+        return "❌ Please select a date from the menu.", "BOOKING_DATE", data, None, None
 
     elif state == "BOOKING_TIME":
-        data["booking_time"] = text
-        return "Understood. 🧠 Briefly describe your *concern* or what you'd like to talk about:", "BOOKING_DESC", data, None, None
+        if text.startswith("TIME_"):
+            data["booking_time"] = text.replace("TIME_", "")[:2] + ":" + text.replace("TIME_", "")[2:]
+            return "Understood. 🧠 Briefly describe your *concern* or what you'd like to talk about:", "BOOKING_DESC", data, None, None
+        return "❌ Please select a time slot from the menu.", "BOOKING_TIME", data, None, None
 
     elif state == "BOOKING_DESC":
-        from datetime import datetime
         new_session = {
             "student_wa_id": wa_id,
             "date": data["booking_date"],
@@ -464,8 +520,54 @@ def handle_conversational_flow(wa_id, message_text, session, is_button=False):
         ], None
 
     elif state == "DR_REG_NAME":
-        db.users.update_one({"wa_id": wa_id}, {"$set": {"name": text, "role": "Doctor", "status": "Active"}}, upsert=True)
-        return f"Welcome, Dr. {text}! 🩺\nYour dashboard is ready.", "START", data, None, None
+        data["name"] = text
+        return f"Nice to meet you, Dr. {text}! 🩺\n\nWhat is your *Email Address*?", "DR_REG_EMAIL", data, None, None
+
+    elif state == "DR_REG_EMAIL":
+        import re
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
+            return "❌ Invalid email format. Please try again (e.g. name@example.com):", "DR_REG_EMAIL", data, None, None
+        data["email"] = text
+        return "Got it. Now, what is your *Phone Number*? (with country code):", "DR_REG_PHONE", data, None, None
+
+    elif state == "DR_REG_PHONE":
+        data["phone"] = text
+        return "Thank you. Finally, what is your *Medical License Number*?", "DR_REG_LICENSE", data, None, None
+
+    elif state == "DR_REG_LICENSE":
+        data["license_no"] = text
+        # Transition to Media Upload
+        return ("📄 *Identity Verification*\n\n"
+                "To verify your professional status, please send a photo of your *Medical ID Card* now:"), "DR_REG_MEDICAL_ID", data, None, None
+
+    elif state == "DR_REG_MEDICAL_ID":
+        if text.startswith("MEDIA_IMAGE_"):
+            data["medical_id_img"] = text.replace("MEDIA_IMAGE_", "")
+            return "✅ Received! Finally, please send a photo of any *Government ID* (e.g. Aadhaar, License):", "DR_REG_GOVT_ID", data, None, None
+        return "❌ Please send an *image* of your Medical ID Card.", "DR_REG_MEDICAL_ID", data, None, None
+
+    elif state == "DR_REG_GOVT_ID":
+        if text.startswith("MEDIA_IMAGE_"):
+            data["govt_id_img"] = text.replace("MEDIA_IMAGE_", "")
+            
+            # Finalize Registration
+            db.users.update_one({"wa_id": wa_id}, {"$set": {
+                "name": data["name"],
+                "email": data["email"],
+                "phone": data["phone"],
+                "license_no": data["license_no"],
+                "medical_id": data["medical_id_img"],
+                "govt_id": data["govt_id_img"],
+                "role": "Doctor",
+                "status": "Active",
+                "registered_at": datetime.utcnow()
+            }}, upsert=True)
+            
+            return (f"🎊 *Registration Complete!*\n\n"
+                    f"Welcome to the team, Dr. {data['name']}! 🩺\n"
+                    f"Your professional credentials have been securely stored for verification.\n\n"
+                    "Your dashboard is now ready."), "DOCTOR_DASHBOARD", data, [{"id": "DR_VIEW_REQS", "title": "View Requests"}], None
+        return "❌ Please send an *image* of your Government ID.", "DR_REG_GOVT_ID", data, None, None
 
     elif state == "ROLE_SELECTION":
         if text == "ROLE_STUDENT":
